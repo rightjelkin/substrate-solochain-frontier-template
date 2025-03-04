@@ -1,0 +1,62 @@
+[package]
+name = 'substrate-validator-set'
+version = '1.1.0'
+authors = ['Gautam Dhameja <quasijatt@outlook.com>']
+edition = '2021'
+license = 'Apache-2.0'
+repository = 'https://github.com/gautamdhameja/substrate-validator-set'
+resolver = "2"
+
+[dependencies.frame]
+package = "polkadot-sdk-frame"
+git = "https://github.com/paritytech/polkadot-sdk"
+branch = "stable2412"
+version = "0.8.0"
+default-features = false
+features = ["experimental", "runtime"]
+
+[dependencies.pallet-session]
+git = "https://github.com/paritytech/polkadot-sdk"
+branch = "stable2412"
+version = "39.0.0"
+default-features = false
+features = ['historical']
+
+[dependencies.sp-staking]
+git = "https://github.com/paritytech/polkadot-sdk"
+branch = "stable2412"
+version = "37.0.0"
+default-features = false
+
+[dependencies.scale-info]
+default-features = false
+features = ['derive', 'serde']
+version = '2.11.6'
+
+[dependencies.log]
+default-features = false
+version = '0.4.22'
+
+[dependencies.codec]
+default-features = false
+features = ['derive']
+package = 'parity-scale-codec'
+version = '3.6.12'
+
+[dev-dependencies.serde]
+features = ['derive']
+default-features = false
+version = '1.0.217'
+
+[features]
+std = [
+  'codec/std',
+  'scale-info/std',
+  'serde/std',
+  'log/std',
+  'frame/std',
+  'pallet-session/std',
+]
+default = ['std']
+runtime-benchmarks = ['frame/runtime-benchmarks']
+try-runtime = ['frame/try-runtime']

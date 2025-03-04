@@ -206,21 +206,27 @@ mod runtime {
 	pub type Timestamp = pallet_timestamp;
 
 	#[runtime::pallet_index(2)]
-	pub type Aura = pallet_aura;
-
-	#[runtime::pallet_index(3)]
-	pub type Grandpa = pallet_grandpa;
-
-	#[runtime::pallet_index(4)]
 	pub type Balances = pallet_balances;
 
+	#[runtime::pallet_index(3)]
+	pub type ValidatorSet = validator_set;
+
+	#[runtime::pallet_index(4)]
+	pub type Session = pallet_session;
+
 	#[runtime::pallet_index(5)]
-	pub type TransactionPayment = pallet_transaction_payment;
+	pub type Aura = pallet_aura;
 
 	#[runtime::pallet_index(6)]
+	pub type Grandpa = pallet_grandpa;
+
+	#[runtime::pallet_index(7)]
+	pub type TransactionPayment = pallet_transaction_payment;
+
+	#[runtime::pallet_index(8)]
 	pub type Sudo = pallet_sudo;
 
 	// Include the custom logic from the pallet-template in the runtime.
-	#[runtime::pallet_index(7)]
+	#[runtime::pallet_index(9)]
 	pub type Template = pallet_template;
 }
