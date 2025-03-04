@@ -28,22 +28,33 @@ use alloc::vec::Vec;
 use frame_support::{
 	genesis_builder_helper::{build_state, get_preset},
 	weights::Weight,
+	traits::OnFinalize
 };
+use core::marker::PhantomData;
 use pallet_grandpa::AuthorityId as GrandpaId;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H160, H256, U256};
 use sp_runtime::{
-	traits::{Block as BlockT, NumberFor},
-	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	traits::{
+		Block as BlockT, NumberFor, Dispatchable, DispatchInfoOf, PostDispatchInfoOf, UniqueSaturatedInto,
+		Get
+	},
+	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError },
+	ApplyExtrinsicResult, Permill,
 };
 use sp_version::RuntimeVersion;
+use fp_rpc::TransactionStatus;
+use pallet_ethereum::{ Call::transact, Transaction as EthereumTransaction };
+use pallet_evm::{ Runner, Account as EVMAccount };
+use codec::{ Decode, Encode };
+use fp_evm::FeeCalculator;
 
 // Local module imports
 use super::{
 	AccountId, Aura, Balance, Block, Executive, Grandpa, InherentDataExt, Nonce, Runtime,
 	RuntimeCall, RuntimeGenesisConfig, SessionKeys, System, TransactionPayment, VERSION,
+	Ethereum, UncheckedExtrinsic, RuntimeOrigin,
 };
 
 #[derive(Clone)]
