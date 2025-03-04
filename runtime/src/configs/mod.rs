@@ -186,9 +186,3 @@ impl pallet_session::Config for Runtime {
 	type WeightInfo = ();
 }
 
-/// Configure the pallet-template in pallets/template.
-impl pallet_template::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
-}
-

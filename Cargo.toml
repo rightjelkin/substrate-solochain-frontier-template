@@ -8,7 +8,6 @@ edition = "2021"
 [workspace]
 members = [
     "node",
-    "pallets/template",
     "pallets/substrate-validator-set",
     "runtime",
 ]
@@ -16,7 +15,6 @@ resolver = "2"
 
 [workspace.dependencies]
 solochain-template-runtime = { path = "./runtime", default-features = false }
-pallet-template = { path = "./pallets/template", default-features = false }
 validator-set = { package = "substrate-validator-set", path = "./pallets/substrate-validator-set", default-features = false }
 clap = { version = "4.5.13" }
 frame-benchmarking-cli = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2412", default-features = false }
