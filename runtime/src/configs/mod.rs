@@ -26,7 +26,7 @@
 // Substrate and Polkadot dependencies
 use frame_support::{
 	derive_impl, parameter_types,
-	traits::{ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, VariantCountOf},
+	traits::{ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, VariantCountOf,FindAuthor},
 	weights::{
 		constants::{RocksDbWeight, WEIGHT_REF_TIME_PER_SECOND},
 		IdentityFee, Weight,
@@ -35,8 +35,14 @@ use frame_support::{
 use frame_system::{limits::{BlockLength, BlockWeights}, EnsureRoot};
 use pallet_transaction_payment::{ConstFeeMultiplier, FungibleAdapter, Multiplier};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_runtime::{traits::{ One, OpaqueKeys }, Perbill};
+use sp_runtime::{traits::{ One, OpaqueKeys, UniqueSaturatedInto }, Perbill};
 use sp_version::RuntimeVersion;
+use sp_core::{crypto::ByteArray, H160, U256};
+use sp_std::marker::PhantomData;
+use pallet_evm::{
+    EVMCurrencyAdapter, EnsureAddressNever, EnsureAddressRoot, FeeCalculator, IdentityAddressMapping,
+    Runner, SubstrateBlockHashMapping,
+};
 
 // Local module imports
 use super::{
@@ -46,6 +52,9 @@ use super::{
 };
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+const BLOCK_GAS_LIMIT: u64 = 75_000_000;
+const MAX_POV_SIZE: u64 = 5 * 1024 * 1024;
+const MAX_STORAGE_GROWTH: u64 = 400 * 1024;
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -186,3 +195,93 @@ impl pallet_session::Config for Runtime {
 	type WeightInfo = ();
 }
 
+impl pallet_evm_chain_id::Config for Runtime {}
+pub struct FindAuthorTruncated<F>(PhantomData<F>);
+impl<F: FindAuthor<u32>> FindAuthor<H160> for FindAuthorTruncated<F> {
+	fn find_author<'a, I>(digests: I) -> Option<H160>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
+	{
+		if let Some(author_index) = F::find_author(digests) {
+			let authority_id =
+				pallet_aura::Authorities::<Runtime>::get()[author_index as usize].clone();
+			return Some(H160::from_slice(&authority_id.to_raw_vec()[4..24]));
+		}
+		None
+	}
+}
+pub struct FixedGasPrice;
+impl FeeCalculator for FixedGasPrice {
+    fn min_gas_price() -> U256 {
+        // Set a minimum gas price as desired
+        U256::from(1_000_000_000)
+    }
+}
+
+parameter_types! {
+	pub BlockGasLimit: U256 = U256::from(BLOCK_GAS_LIMIT);
+	pub const GasLimitPovSizeRatio: u64 = BLOCK_GAS_LIMIT.saturating_div(MAX_POV_SIZE);
+	pub const GasLimitStorageGrowthRatio: u64 = BLOCK_GAS_LIMIT.saturating_div(MAX_STORAGE_GROWTH);
+	pub PrecompilesValue: FrontierPrecompiles<Runtime> = FrontierPrecompiles::<_>::new();
+	pub WeightPerGas: Weight = Weight::from_parts(weight_per_gas(BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK), 0);
+}
+
+impl pallet_evm::Config for crate::Runtime {
+	type AccountProvider = pallet_evm::FrameSystemAccountProvider<Self>;
+	type FeeCalculator = BaseFee;
+	type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
+	type WeightPerGas = WeightPerGas;
+	type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
+	type CallOrigin = EnsureAccountId20;
+	type WithdrawOrigin = EnsureAccountId20;
+	type AddressMapping = IdentityAddressMapping;
+	type Currency = Balances;
+	type RuntimeEvent = RuntimeEvent;
+	type PrecompilesType = FrontierPrecompiles<Self>;
+	type PrecompilesValue = PrecompilesValue;
+	type ChainId = EVMChainId;
+	type BlockGasLimit = BlockGasLimit;
+	type Runner = pallet_evm::runner::stack::Runner<Self>;
+	type OnChargeTransaction = ();
+	type OnCreate = ();
+	type FindAuthor = FindAuthorTruncated<Aura>;
+	type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
+	type GasLimitStorageGrowthRatio = GasLimitStorageGrowthRatio;
+	type Timestamp = Timestamp;
+	type WeightInfo = pallet_evm::weights::SubstrateWeight<Self>;
+}
+
+
+parameter_types! {
+	pub const PostBlockAndTxnHashes: PostLogContent = PostLogContent::BlockAndTxnHashes;
+}
+
+impl pallet_ethereum::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type StateRoot = pallet_ethereum::IntermediateStateRoot<Self::Version>;
+	type PostLogContent = PostBlockAndTxnHashes;
+	type ExtraDataLength = ConstU32<30>;
+}
+
+parameter_types! {
+	pub DefaultBaseFeePerGas: U256 = U256::from(1_000_000_000);
+	pub DefaultElasticity: Permill = Permill::from_parts(125_000);
+}
+pub struct BaseFeeThreshold;
+impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
+	fn lower() -> Permill {
+		Permill::zero()
+	}
+	fn ideal() -> Permill {
+		Permill::from_parts(500_000)
+	}
+	fn upper() -> Permill {
+		Permill::from_parts(1_000_000)
+	}
+}
+impl pallet_base_fee::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Threshold = BaseFeeThreshold;
+	type DefaultBaseFeePerGas = DefaultBaseFeePerGas;
+	type DefaultElasticity = DefaultElasticity;
+}

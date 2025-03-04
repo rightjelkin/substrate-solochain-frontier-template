@@ -225,4 +225,17 @@ mod runtime {
 
 	#[runtime::pallet_index(8)]
 	pub type Sudo = pallet_sudo;
+
+	#[runtime::pallet_index(9)]
+	pub type Ethereum = pallet_ethereum;
+
+	#[runtime::pallet_index(10)]
+	pub type EVM = pallet_evm;
+
+	#[runtime::pallet_index(11)]
+	pub type EVMChainId = pallet_evm_chain_id;
+
+	#[runtime::pallet_index(12)]
+	pub type BaseFee = pallet_base_fee;
+
 }
