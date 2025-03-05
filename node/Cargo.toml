@@ -15,6 +15,7 @@ build = "build.rs"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+codec = { workspace = true }
 clap = { features = ["derive"], workspace = true }
 futures = { features = ["thread-pool"], workspace = true }
 serde_json = { workspace = true, default-features = true }
@@ -35,6 +36,8 @@ sc-transaction-pool.workspace = true
 sc-transaction-pool.default-features = true
 sc-transaction-pool-api.workspace = true
 sc-transaction-pool-api.default-features = true
+sc-network-sync.workspace = true
+sc-rpc.workspace = true
 sc-offchain.workspace = true
 sc-offchain.default-features = true
 sc-consensus.workspace = true
@@ -49,6 +52,9 @@ sp-consensus-grandpa.workspace = true
 sp-consensus-grandpa.default-features = true
 sp-genesis-builder.workspace = true
 sp-genesis-builder.default-features = true
+sp-offchain = { workspace = true, features = ["default"] }
+sp-session = { workspace = true, features = ["default"] }
+sp-transaction-pool = { workspace = true, features = ["default"] }
 sc-client-api.workspace = true
 sc-client-api.default-features = true
 sc-basic-authorship.workspace = true
@@ -73,6 +79,8 @@ frame-system.workspace = true
 frame-system.default-features = true
 frame-metadata-hash-extension.workspace = true
 frame-metadata-hash-extension.default-features = true
+frame-system-rpc-runtime-api = { workspace = true }
+pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 pallet-transaction-payment.workspace = true
 pallet-transaction-payment.default-features = true
 pallet-transaction-payment-rpc.workspace = true

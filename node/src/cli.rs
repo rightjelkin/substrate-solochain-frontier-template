@@ -1,4 +1,5 @@
 use sc_cli::RunCmd;
+use crate::service::EthConfiguration;
 
 #[derive(Debug, clap::Parser)]
 pub struct Cli {
@@ -7,6 +8,9 @@ pub struct Cli {
 
 	#[clap(flatten)]
 	pub run: RunCmd,
+
+	#[command(flatten)]
+	pub eth: EthConfiguration,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -43,4 +47,7 @@ pub enum Subcommand {
 
 	/// Db meta columns information.
 	ChainInfo(sc_cli::ChainInfoCmd),
+
+	/// Db meta columns information.
+	FrontierDb(fc_cli::FrontierDbCmd),
 }

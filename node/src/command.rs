@@ -1,14 +1,15 @@
+use futures::TryFutureExt;
 use crate::{
 	benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder},
 	chain_spec,
 	cli::{Cli, Subcommand},
-	service,
+	service::{self, db_config_dir},
 };
 use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
 use sc_cli::SubstrateCli;
-use sc_service::PartialComponents;
-use solochain_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
-use sp_keyring::Sr25519Keyring;
+use sc_service::DatabaseSource;
+use fc_db::kv::frontier_database_dir;
+use solochain_template_runtime::{Block, EXISTENTIAL_DEPOSIT, genesis_config_presets::get_account_id_from_seed};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -57,140 +58,177 @@ pub fn run() -> sc_cli::Result<()> {
 		},
 		Some(Subcommand::CheckBlock(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, import_queue, .. } =
-					service::new_partial(&config)?;
+			runner.async_run(|mut config| {
+				let (client, _, import_queue, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
 		Some(Subcommand::ExportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, .. } = service::new_partial(&config)?;
+			runner.async_run(|mut config| {
+				let (client, _, _, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth)?;
 				Ok((cmd.run(client, config.database), task_manager))
 			})
 		},
 		Some(Subcommand::ExportState(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, .. } = service::new_partial(&config)?;
+			runner.async_run(|mut config| {
+				let (client, _, _, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth)?;
 				Ok((cmd.run(client, config.chain_spec), task_manager))
 			})
 		},
 		Some(Subcommand::ImportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, import_queue, .. } =
-					service::new_partial(&config)?;
+			runner.async_run(|mut config| {
+				let (client, _, import_queue, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
 		Some(Subcommand::PurgeChain(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.sync_run(|config| cmd.run(config.database))
+			runner.sync_run(|config| {
+				// Remove Frontier offchain db
+				let db_config_dir = db_config_dir(&config);
+				match cli.eth.frontier_backend_type {
+					crate::eth::BackendType::KeyValue => {
+						let frontier_database_config = match config.database {
+							DatabaseSource::RocksDb { .. } => DatabaseSource::RocksDb {
+								path: frontier_database_dir(&db_config_dir, "db"),
+								cache_size: 0,
+							},
+							DatabaseSource::ParityDb { .. } => DatabaseSource::ParityDb {
+								path: frontier_database_dir(&db_config_dir, "paritydb"),
+							},
+							_ => {
+								return Err(format!(
+									"Cannot purge `{:?}` database",
+									config.database
+								)
+								.into())
+							}
+						};
+						cmd.run(frontier_database_config)?;
+					}
+					crate::eth::BackendType::Sql => {
+						let db_path = db_config_dir.join("sql");
+						match std::fs::remove_dir_all(&db_path) {
+							Ok(_) => {
+								println!("{:?} removed.", &db_path);
+							}
+							Err(ref err) if err.kind() == std::io::ErrorKind::NotFound => {
+								eprintln!("{:?} did not exist.", &db_path);
+							}
+							Err(err) => {
+								return Err(format!(
+									"Cannot purge `{:?}` database: {:?}",
+									db_path, err,
+								)
+								.into())
+							}
+						};
+					}
+				};
+				cmd.run(config.database)
+			})
 		},
 		Some(Subcommand::Revert(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, backend, .. } =
-					service::new_partial(&config)?;
-				let aux_revert = Box::new(|client, _, blocks| {
+			runner.async_run(|mut config| {
+				let (client, backend, _, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth)?;
+				let aux_revert = Box::new(move |client, _, blocks| {
 					sc_consensus_grandpa::revert(client, blocks)?;
 					Ok(())
 				});
 				Ok((cmd.run(client, backend, Some(aux_revert)), task_manager))
 			})
 		},
+		#[cfg(feature = "runtime-benchmarks")]
 		Some(Subcommand::Benchmark(cmd)) => {
+			use crate::benchmarking::{
+				inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder,
+			};
+			use frame_benchmarking_cli::{
+				BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE,
+			};
+			use frontier_template_runtime::{Hashing, EXISTENTIAL_DEPOSIT};
+
 			let runner = cli.create_runner(cmd)?;
+			match cmd {
+				BenchmarkCmd::Pallet(cmd) => runner
+					.sync_run(|config| cmd.run_with_spec::<Hashing, ()>(Some(config.chain_spec))),
+				BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
+					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth)?;
+					cmd.run(client)
+				}),
+				BenchmarkCmd::Storage(cmd) => runner.sync_run(|mut config| {
+					let (client, backend, _, _, _) = service::new_chain_ops(&mut config, &cli.eth)?;
+					let db = backend.expose_db();
+					let storage = backend.expose_storage();
+					cmd.run(config, client, db, storage)
+				}),
+				BenchmarkCmd::Overhead(cmd) => runner.sync_run(|mut config| {
+					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth)?;
+					let ext_builder = RemarkBuilder::new(client.clone());
+					cmd.run(
+						config.chain_spec.name().into(),
+						client,
+						inherent_benchmark_data()?,
+						Vec::new(),
+						&ext_builder,
+						false,
+					)
+				}),
+				BenchmarkCmd::Extrinsic(cmd) => runner.sync_run(|mut config| {
+					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth)?;
+					// Register the *Remark* and *TKA* builders.
+					let ext_factory = ExtrinsicFactory(vec![
+						Box::new(RemarkBuilder::new(client.clone())),
+						Box::new(TransferKeepAliveBuilder::new(
+							client.clone(),
+							get_account_id_from_seed::<sp_core::ecdsa::Public>("Alice"),
+							EXISTENTIAL_DEPOSIT,
+						)),
+					]);
 
-			runner.sync_run(|config| {
-				// This switch needs to be in the client, since the client decides
-				// which sub-commands it wants to support.
-				match cmd {
-					BenchmarkCmd::Pallet(cmd) => {
-						if !cfg!(feature = "runtime-benchmarks") {
-							return Err(
-								"Runtime benchmarking wasn't enabled when building the node. \
-							You can enable it with `--features runtime-benchmarks`."
-									.into(),
-							);
-						}
-
-						cmd.run_with_spec::<sp_runtime::traits::HashingFor<Block>, ()>(Some(
-							config.chain_spec,
-						))
-					},
-					BenchmarkCmd::Block(cmd) => {
-						let PartialComponents { client, .. } = service::new_partial(&config)?;
-						cmd.run(client)
-					},
-					#[cfg(not(feature = "runtime-benchmarks"))]
-					BenchmarkCmd::Storage(_) => Err(
-						"Storage benchmarking can be enabled with `--features runtime-benchmarks`."
-							.into(),
-					),
-					#[cfg(feature = "runtime-benchmarks")]
-					BenchmarkCmd::Storage(cmd) => {
-						let PartialComponents { client, backend, .. } =
-							service::new_partial(&config)?;
-						let db = backend.expose_db();
-						let storage = backend.expose_storage();
-
-						cmd.run(config, client, db, storage)
-					},
-					BenchmarkCmd::Overhead(cmd) => {
-						let PartialComponents { client, .. } = service::new_partial(&config)?;
-						let ext_builder = RemarkBuilder::new(client.clone());
-
-						cmd.run(
-							config.chain_spec.name().into(),
-							client,
-							inherent_benchmark_data()?,
-							Vec::new(),
-							&ext_builder,
-							false,
-						)
-					},
-					BenchmarkCmd::Extrinsic(cmd) => {
-						let PartialComponents { client, .. } = service::new_partial(&config)?;
-						// Register the *Remark* and *TKA* builders.
-						let ext_factory = ExtrinsicFactory(vec![
-							Box::new(RemarkBuilder::new(client.clone())),
-							Box::new(TransferKeepAliveBuilder::new(
-								client.clone(),
-								Sr25519Keyring::Alice.to_account_id().into(),
-								EXISTENTIAL_DEPOSIT,
-							)),
-						]);
-
-						cmd.run(client, inherent_benchmark_data()?, Vec::new(), &ext_factory)
-					},
-					BenchmarkCmd::Machine(cmd) =>
-						cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()),
+					cmd.run(client, inherent_benchmark_data()?, Vec::new(), &ext_factory)
+				}),
+				BenchmarkCmd::Machine(cmd) => {
+					runner.sync_run(|config| cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()))
 				}
-			})
-		},
+			}
+		}
+		#[cfg(not(feature = "runtime-benchmarks"))]
+		Some(Subcommand::Benchmark(_)) => Err("Benchmarking wasn't enabled when building the node. \
+			You can enable it with `--features runtime-benchmarks`."
+			.into()),
 		Some(Subcommand::ChainInfo(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.sync_run(|config| cmd.run::<Block>(&config))
 		},
+		Some(Subcommand::FrontierDb(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.sync_run(|mut config| {
+				let (client, _, _, _, frontier_backend) =
+					service::new_chain_ops(&mut config, &cli.eth)?;
+				let frontier_backend = match frontier_backend {
+					fc_db::Backend::KeyValue(kv) => kv,
+					_ => panic!("Only fc_db::Backend::KeyValue supported"),
+				};
+				cmd.run(client, frontier_backend)
+			})
+		}
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
-				match config.network.network_backend {
-					sc_network::config::NetworkBackendType::Libp2p => service::new_full::<
-						sc_network::NetworkWorker<
-							solochain_template_runtime::opaque::Block,
-							<solochain_template_runtime::opaque::Block as sp_runtime::traits::Block>::Hash,
-						>,
-					>(config)
-					.map_err(sc_cli::Error::Service),
-					sc_network::config::NetworkBackendType::Litep2p =>
-						service::new_full::<sc_network::Litep2pNetworkBackend>(config)
-							.map_err(sc_cli::Error::Service),
-				}
+				service::build_full(config, cli.eth)
+					.map_err(Into::into)
+					.await
 			})
-		},
+		}
 	}
 }
