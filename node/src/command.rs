@@ -159,7 +159,7 @@ pub fn run() -> sc_cli::Result<()> {
 							Box::new(RemarkBuilder::new(client.clone())),
 							Box::new(TransferKeepAliveBuilder::new(
 								client.clone(),
-								Sr25519Keyring::Alice.to_account_id(),
+								Sr25519Keyring::Alice.to_account_id().into(),
 								EXISTENTIAL_DEPOSIT,
 							)),
 						]);

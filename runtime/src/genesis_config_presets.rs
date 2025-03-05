@@ -17,18 +17,61 @@
 
 use crate::{
 	AccountId, BalancesConfig, RuntimeGenesisConfig, SudoConfig,
-	SessionConfig, ValidatorSetConfig, SessionKeys
+	SessionConfig, ValidatorSetConfig, SessionKeys, Signature, 
+	configs::SS58Prefix
 };
-use alloc::{vec, vec::Vec};
+use alloc::{vec, vec::Vec, format, string::String};
 use serde_json::Value;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_genesis_builder::{self, PresetId};
 use sp_keyring::AccountKeyring;
+#[allow(unused_imports)]
+use sp_core::{ecdsa,sr25519};
+use sp_core::{Pair, Public};
+use sp_runtime::traits::{ Verify, IdentifyAccount };
+
+type Properties = serde_json::map::Map<String, serde_json::Value>;
 
 fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 	SessionKeys { aura, grandpa }
 }
+
+pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+	TPublic::Pair::from_string(&format!("//{}", seed), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+#[allow(dead_code)]
+type AccountPublic = <Signature as Verify>::Signer;
+
+/// Generate an account ID from seed.
+/// For use with `AccountId32`, `dead_code` if `AccountId20`.
+#[allow(dead_code)]
+pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
+where
+	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
+{
+	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
+}
+
+/// Generate an Aura authority key.
+pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
+	(
+		get_account_id_from_seed::<ecdsa::Public>(s),
+		get_from_seed::<AuraId>(s),
+		get_from_seed::<GrandpaId>(s)
+	)
+}
+
+fn properties() -> Properties {
+	let mut properties = Properties::new();
+	properties.insert("tokenDecimals".into(), 18.into());
+	properties.insert("ss58Format".into(), SS58Prefix::get().into());
+	properties
+}
+
 // Returns the genesis config presets populated with given parameters.
 fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
@@ -70,15 +113,15 @@ fn testnet_genesis(
 pub fn development_config_genesis() -> Value {
 	testnet_genesis(
 		vec![(
-			AccountKeyring::Alice.to_account_id(),
+			AccountKeyring::Alice.to_account_id().into(),
 			sp_keyring::Sr25519Keyring::Alice.public().into(),
 			sp_keyring::Ed25519Keyring::Alice.public().into(),
 		)],
 		vec![
-			AccountKeyring::Alice.to_account_id(),
-			AccountKeyring::Bob.to_account_id(),
+			AccountKeyring::Alice.to_account_id().into(),
+			AccountKeyring::Bob.to_account_id().into(),
 		],
-		sp_keyring::AccountKeyring::Alice.to_account_id(),
+		sp_keyring::AccountKeyring::Alice.to_account_id().into(),
 	)
 }
 
@@ -87,21 +130,21 @@ pub fn local_config_genesis() -> Value {
 	testnet_genesis(
 		vec![
 			(
-				AccountKeyring::Alice.to_account_id(),
+				AccountKeyring::Alice.to_account_id().into(),
 				sp_keyring::Sr25519Keyring::Alice.public().into(),
 				sp_keyring::Ed25519Keyring::Alice.public().into(),
 			),
 			(
-				AccountKeyring::Bob.to_account_id(),
+				AccountKeyring::Bob.to_account_id().into(),
 				sp_keyring::Sr25519Keyring::Bob.public().into(),
 				sp_keyring::Ed25519Keyring::Bob.public().into(),
 			),
 		],
 		AccountKeyring::iter()
 			.filter(|v| v != &AccountKeyring::One && v != &AccountKeyring::Two)
-			.map(|v| v.to_account_id())
+			.map(|v| v.to_account_id().into())
 			.collect::<Vec<_>>(),
-		AccountKeyring::Alice.to_account_id(),
+		AccountKeyring::Alice.to_account_id().into(),
 	)
 }
 
