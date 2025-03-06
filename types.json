@@ -1,0 +1,6 @@
+{
+    "Address": "AccountId20",
+    "LookupSource": "AccountId20",
+    "AccountId": "EthereumAccountId",
+    "ExtrinsicSignature": "EthereumSignature"
+}

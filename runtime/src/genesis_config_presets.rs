@@ -18,9 +18,11 @@
 use crate::{
 	AccountId, BalancesConfig, RuntimeGenesisConfig, SudoConfig,
 	SessionConfig, ValidatorSetConfig, SessionKeys, Signature, 
-	configs::SS58Prefix
+	configs::SS58Prefix, Balance
 };
-use alloc::{vec, vec::Vec, format, string::String};
+use hex_literal::hex;
+use core::str::FromStr;
+use alloc::{vec, vec::Vec, format, string::String, collections::BTreeMap};
 use serde_json::Value;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -28,7 +30,7 @@ use sp_genesis_builder::{self, PresetId};
 use sp_keyring::AccountKeyring;
 #[allow(unused_imports)]
 use sp_core::{ecdsa,sr25519};
-use sp_core::{Pair, Public};
+use sp_core::{Pair, Public, U256, H160};
 use sp_runtime::traits::{ Verify, IdentifyAccount };
 
 type Properties = serde_json::map::Map<String, serde_json::Value>;
@@ -65,25 +67,61 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 	)
 }
 
-fn properties() -> Properties {
+pub fn properties() -> Properties {
 	let mut properties = Properties::new();
+	properties.insert("tokenSymbol".into(), "SFT".into());
 	properties.insert("tokenDecimals".into(), 18.into());
+	properties.insert("isEthereum".into(), true.into());
 	properties.insert("ss58Format".into(), SS58Prefix::get().into());
 	properties
 }
+
+const UNITS: Balance = 1_000_000_000_000_000_000;
 
 // Returns the genesis config presets populated with given parameters.
 fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	endowed_accounts: Vec<AccountId>,
 	root: AccountId,
+	chain_id: u64
 ) -> Value {
+	let evm_accounts = {
+		let mut map = BTreeMap::new();
+		map.insert(			
+			// H160 address of Alice dev account
+			// Derived from SS58 (42 prefix) address
+			// SS58: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+			// hex: 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+			// Using the full hex key, truncating to the first 20 bytes (the first 40 hex chars)
+			H160::from_str("d43593c715fdd31c61141abd04a99fd6822c8558")
+				.expect("internal H160 is valid; qed"),
+			fp_evm::GenesisAccount {
+				balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
+					.expect("internal U256 is valid; qed"),
+				code: Default::default(),
+				nonce: Default::default(),
+				storage: Default::default(),
+			},
+		);
+		map.insert(
+			// H160 address for benchmark usage
+			H160::from_str("1000000000000000000000000000000000000001")
+				.expect("internal H160 is valid; qed"),
+			fp_evm::GenesisAccount {
+				nonce: U256::from(1),
+				balance: U256::from(1_000_000_000_000_000_000_000_000u128),
+				storage: Default::default(),
+				code: vec![0x00],
+			},
+		);
+		map
+	};
 	let config = RuntimeGenesisConfig {
 		balances: BalancesConfig {
 			balances: endowed_accounts
 				.iter()
 				.cloned()
-				.map(|k| (k, 1u128 << 60))
+				.map(|k| (k, 1_000_000 * UNITS))
 				.collect::<Vec<_>>(),
 		},
 		validator_set: ValidatorSetConfig {
@@ -103,6 +141,11 @@ fn testnet_genesis(
 			..Default::default()
 		},
 		sudo: SudoConfig { key: Some(root) },
+		evm: pallet_evm::GenesisConfig {
+			accounts: evm_accounts,
+			..Default::default()
+		},
+		evm_chain_id: pallet_evm_chain_id::GenesisConfig { chain_id: chain_id, ..Default::default() },
 		..Default::default()
 	};
 
@@ -112,16 +155,14 @@ fn testnet_genesis(
 /// Return the development genesis config.
 pub fn development_config_genesis() -> Value {
 	testnet_genesis(
-		vec![(
-			AccountKeyring::Alice.to_account_id().into(),
-			sp_keyring::Sr25519Keyring::Alice.public().into(),
-			sp_keyring::Ed25519Keyring::Alice.public().into(),
-		)],
+		vec![
+			authority_keys_from_seed("Alice")
+		],
 		vec![
 			AccountKeyring::Alice.to_account_id().into(),
-			AccountKeyring::Bob.to_account_id().into(),
 		],
 		sp_keyring::AccountKeyring::Alice.to_account_id().into(),
+		22
 	)
 }
 
@@ -129,22 +170,19 @@ pub fn development_config_genesis() -> Value {
 pub fn local_config_genesis() -> Value {
 	testnet_genesis(
 		vec![
-			(
-				AccountKeyring::Alice.to_account_id().into(),
-				sp_keyring::Sr25519Keyring::Alice.public().into(),
-				sp_keyring::Ed25519Keyring::Alice.public().into(),
-			),
-			(
-				AccountKeyring::Bob.to_account_id().into(),
-				sp_keyring::Sr25519Keyring::Bob.public().into(),
-				sp_keyring::Ed25519Keyring::Bob.public().into(),
-			),
+			authority_keys_from_seed("Alice"),
+			authority_keys_from_seed("Bob"),
 		],
-		AccountKeyring::iter()
-			.filter(|v| v != &AccountKeyring::One && v != &AccountKeyring::Two)
-			.map(|v| v.to_account_id().into())
-			.collect::<Vec<_>>(),
-		AccountKeyring::Alice.to_account_id().into(),
+		vec![
+			AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")), // Alith
+			AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")), // Baltathar
+			AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")), // Charleth
+			AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")), // Dorothy
+			AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB")), // Ethan
+			AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")), // Faith
+		],
+		AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
+		32769
 	)
 }
 
