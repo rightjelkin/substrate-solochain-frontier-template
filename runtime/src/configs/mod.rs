@@ -32,6 +32,7 @@ use frame_support::{
 		IdentityFee, Weight,
 	},
 };
+use alloc::vec::Vec;
 use frame_system::{limits::{BlockLength, BlockWeights}, EnsureRoot};
 use pallet_transaction_payment::{ConstFeeMultiplier, FungibleAdapter, Multiplier};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -39,7 +40,7 @@ use sp_runtime::{
 	traits::{ One, OpaqueKeys, IdentityLookup },
 	Perbill, Permill, ConsensusEngineId};
 use sp_version::RuntimeVersion;
-use sp_core::{crypto::ByteArray, H160, U256};
+use sp_core::{crypto::ByteArray, H160, U256, H256};
 use pallet_evm::{
 	EnsureAccountId20, IdentityAddressMapping
 };
@@ -234,6 +235,180 @@ parameter_types! {
 	pub WeightPerGas: Weight = Weight::from_parts(weight_per_gas(BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK), 0);
 }
 
+/// Custom EVM runner with additional prevalidation capabilities
+pub struct CustomRunner<T>(PhantomData<T>);
+
+impl<T: pallet_evm::Config> pallet_evm::Runner<T> for CustomRunner<T>
+where
+    T::AccountId: From<H160>,
+    <T::AccountId as TryFrom<H160>>::Error: core::fmt::Debug,
+    pallet_evm::BalanceOf<T>: TryFrom<U256> + Into<U256>,
+{
+    fn call(
+        source: H160,
+        target: H160,
+        input: Vec<u8>,
+        value: U256,
+        gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        validate: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        config: &evm::Config,
+    ) -> Result<pallet_evm::CallInfo, pallet_evm::RunnerError<pallet_evm::Error<T>>> {
+        // Add your custom precall logic here
+        // For example:
+        // - Additional gas limit checks
+        // - Custom access control
+        // - Special handling for specific addresses
+        // - Logging or metrics collection
+
+        // After prevalidation, call the original runner
+        pallet_evm::runner::stack::Runner::<T>::call(
+            source,
+            target,
+            input,
+            value,
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            nonce,
+            access_list,
+            is_transactional,
+            validate,
+            weight_limit,
+            proof_size_base_cost,
+            config,
+        )
+    }
+
+    fn create(
+        source: H160,
+        init: Vec<u8>,
+        value: U256,
+        gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        validate: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        config: &evm::Config,
+    ) -> Result<pallet_evm::CreateInfo, pallet_evm::RunnerError<pallet_evm::Error<T>>> {
+        // Add your custom precreate logic here
+        // For example:
+        // - Additional validation for contract creation
+        // - Custom bytecode analysis
+        // - Deployment restrictions
+
+        // After prevalidation, call the original runner
+        pallet_evm::runner::stack::Runner::<T>::create(
+            source,
+            init,
+            value,
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            nonce,
+            access_list,
+            is_transactional,
+            validate,
+            weight_limit,
+            proof_size_base_cost,
+            config,
+        )
+    }
+
+    fn create2(
+        source: H160,
+        init: Vec<u8>,
+        salt: H256,
+        value: U256,
+        gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        validate: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        config: &evm::Config,
+    ) -> Result<pallet_evm::CreateInfo, pallet_evm::RunnerError<pallet_evm::Error<T>>> {
+        // Add your custom pre-create2 logic here
+        // For example:
+        // - Additional validation for deterministic contract creation
+        // - Salt validation
+        // - Custom security checks
+
+        // After prevalidation, call the original runner
+        pallet_evm::runner::stack::Runner::<T>::create2(
+            source,
+            init,
+            salt,
+            value,
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            nonce,
+            access_list,
+            is_transactional,
+            validate,
+            weight_limit,
+            proof_size_base_cost,
+            config,
+        )
+    }
+	
+	type Error = pallet_evm::Error<T>;
+	
+	fn validate(
+			source: H160,
+			target: Option<H160>,
+			input: Vec<u8>,
+			value: U256,
+			gas_limit: u64,
+			max_fee_per_gas: Option<U256>,
+			max_priority_fee_per_gas: Option<U256>,
+			nonce: Option<U256>,
+			access_list: Vec<(H160, Vec<sp_core::H256>)>,
+			is_transactional: bool,
+			weight_limit: Option<Weight>,
+			proof_size_base_cost: Option<u64>,
+			evm_config: &evm::Config,
+	) -> Result<(), pallet_evm::RunnerError<Self::Error>> {
+		// Add your custom prevalidation logic here
+        // For example:
+        // - Additional validation for deterministic contract creation
+        // - Salt validation
+        // - Custom security checks
+
+        // After prevalidation, call the original runner
+		pallet_evm::runner::stack::Runner::<T>::validate(
+			source,
+			target,
+			input,
+			value,
+			gas_limit,
+			max_fee_per_gas,
+			max_priority_fee_per_gas,
+			nonce,
+			access_list,
+			is_transactional,
+			weight_limit,
+			proof_size_base_cost,
+			evm_config,
+		)
+	}
+}
+
+
 impl pallet_evm::Config for Runtime {
 	type AccountProvider = pallet_evm::FrameSystemAccountProvider<Self>;
 	type FeeCalculator = BaseFee;
@@ -249,7 +424,7 @@ impl pallet_evm::Config for Runtime {
 	type PrecompilesValue = PrecompilesValue;
 	type ChainId = EVMChainId;
 	type BlockGasLimit = BlockGasLimit;
-	type Runner = pallet_evm::runner::stack::Runner<Self>;
+	type Runner = CustomRunner<Self>;
 	type OnChargeTransaction = ();
 	type OnCreate = ();
 	type FindAuthor = FindAuthorTruncated<Aura>;

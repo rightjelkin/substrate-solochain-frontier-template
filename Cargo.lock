@@ -10367,6 +10367,7 @@ dependencies = [
 name = "solochain-template-runtime"
 version = "0.1.0"
 dependencies = [
+ "evm",
  "fp-account",
  "fp-evm",
  "fp-rpc",

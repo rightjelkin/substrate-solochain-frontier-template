@@ -16,6 +16,7 @@ resolver = "2"
 [workspace.dependencies]
 solochain-template-runtime = { path = "./runtime", default-features = false }
 validator-set = { package = "substrate-validator-set", path = "./pallets/substrate-validator-set", default-features = false }
+evm = { git = "https://github.com/rust-ethereum/evm", branch = "v0.x", default-features = false }
 clap = { version = "4.5.13" }
 log = { version = "0.4.22", default-features = false }
 hex-literal = "0.4.1"
