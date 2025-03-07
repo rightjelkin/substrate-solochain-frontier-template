@@ -236,6 +236,9 @@ parameter_types! {
 }
 
 /// Custom EVM runner with additional prevalidation capabilities
+/// 
+
+pub const RUNNER_LOG_TARGET: &str = "runtime::CustomRunner";
 pub struct CustomRunner<T>(PhantomData<T>);
 
 impl<T: pallet_evm::Config> pallet_evm::Runner<T> for CustomRunner<T>
@@ -268,6 +271,7 @@ where
         // - Logging or metrics collection
 
         // After prevalidation, call the original runner
+		log::debug!(target: RUNNER_LOG_TARGET, "CustomRunner::call()");
         pallet_evm::runner::stack::Runner::<T>::call(
             source,
             target,
@@ -308,6 +312,7 @@ where
         // - Deployment restrictions
 
         // After prevalidation, call the original runner
+		log::debug!(target: RUNNER_LOG_TARGET, "CustomRunner::create()");
         pallet_evm::runner::stack::Runner::<T>::create(
             source,
             init,
@@ -348,6 +353,7 @@ where
         // - Custom security checks
 
         // After prevalidation, call the original runner
+		log::debug!(target: RUNNER_LOG_TARGET, "CustomRunner::create2()");
         pallet_evm::runner::stack::Runner::<T>::create2(
             source,
             init,
@@ -390,6 +396,7 @@ where
         // - Custom security checks
 
         // After prevalidation, call the original runner
+		log::debug!(target: RUNNER_LOG_TARGET, "CustomRunner::validate()");
 		pallet_evm::runner::stack::Runner::<T>::validate(
 			source,
 			target,
