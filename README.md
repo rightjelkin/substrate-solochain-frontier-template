@@ -13,7 +13,7 @@ This workspace is a simple solochain substrate template based on the [Polkadot S
 Fetch solochain template code:
 
 ```sh
-git clone https://github.com/rightjelkin/substrate-solochain-evm.git solochain-template
+git clone https://github.com/rightjelkin/substrate-solochain-frontier-template.git solochain-template
 cd solochain-template
 ```
 
