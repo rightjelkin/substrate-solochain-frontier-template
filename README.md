@@ -8,6 +8,8 @@ This workspace is a simple solochain substrate template based on the [Polkadot S
 - **Validator Set Management**: For changing the validators list on-chain, this workspace uses the code of [Substrate Validator Set](https://github.com/web3gautam/substrate-validator-set) project but with bumped Polkadot dependencies to stable2412 to be compatible with frontier. Look at its documentation for more details.
 - **Ethereum Compatibility**: Fully compatible with Ethereum-like APIs, allowing you to use tools like MetaMask to interact with the chain.
 
+> ⚠️ Note: The benchmarking functionality has not been thoroughly tested yet. Please use caution when working with benchmarks as they may not function as expected.
+
 ## Getting Started
 
 Fetch solochain template code:
