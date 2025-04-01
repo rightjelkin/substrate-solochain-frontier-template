@@ -29,7 +29,52 @@ cargo build --release
 
 ### Launching Testnet
 
-@TODO
+Both examples below assume that chain will be stored in ./chain folder
+
+#### Alice and Bob
+
+Fastest method of launching the testnet
+
+```bash
+./target/release/solochain-template-node --chain=local --base-path ./chain/alice --alice --rpc-cors=all --rpc-methods=Unsafe --rpc-external --port 30334 --node-key 0x0185d84f4641be58c8a30e3014006d85ef50ce8ec877e366f6a3d2e78873559b
+```
+
+```bash
+./target/release/solochain-template-node --chain=local --base-path ./chain/bob --bob --rpc-cors=all --rpc-methods=Unsafe --rpc-external --port 30335 --bootnodes /ip4/127.0.0.1/tcp/30334/p2p/12D3KooWDLpRT9KFo6pKdkmdQQt599tmqVYpoeiHemY32Gf4RUpp --node-key 0xefb8bf6cb99c6093561803d7c04854a192a725ba4786a303aaf404c65f51f42a
+```
+
+Change `12D3KooWDLpRT9KFo6pKdkmdQQt599tmqVYpoeiHemY32Gf4RUpp` in second command to Alice node identity.
+You can find it during launching of Alice node (see logs)
+
+#### Alith and Baltathar
+
+You can launch the testnet with Alith and Baltathar (frontier accounts) as validators.
+
+1. Comment Bob and Alice lines in [genesis_config_presets.rs](./runtime/src/genesis_config_presets.rs) (204 and 205)
+2. Uncomment lines 211 and 212 in the same file
+3. Add Alith and Baltathar keys into keystore
+
+    ```bash
+    ./target/release/solochain-template-node key insert --base-path ./chain/alith --key-type aura --scheme Sr25519 --suri "0x3dff7d5395fbc09a035a935a5089d1eb7f94be8ef12eb35c55ab731e0c83b296"
+    ./target/release/solochain-template-node key insert --base-path ./chain/alith --key-type gran --scheme Ed25519 --suri "0x3dff7d5395fbc09a035a935a5089d1eb7f94be8ef12eb35c55ab731e0c83b296"
+    ```
+
+    ```bash
+    ./target/release/solochain-template-node key insert --base-path ./chain/baltathar --key-type aura --scheme Sr25519 --suri "0x4f9379c4bb9793f97796757ba0c2384f0963da4741315c9f352a4bc31cd16ac4"
+    ./target/release/solochain-template-node key insert --base-path ./chain/baltathar --key-type gran --scheme Ed25519 --suri "0x4f9379c4bb9793f97796757ba0c2384f0963da4741315c9f352a4bc31cd16ac4"
+    ```
+
+4. Launch nodes with that commands (notice --base-path and do not use --alice or --bob)
+
+    ```bash
+    ./target/release/solochain-template-node --chain=local --base-path ./chain/alith --rpc-cors=all --rpc-methods=Unsafe --rpc-external --port 30334 --node-key 0x0185d84f4641be58c8a30e3014006d85ef50ce8ec877e366f6a3d2e78873559b --validator
+    ```
+
+    ```bash
+    ./target/release/solochain-template-node --chain=local --base-path ./chain/baltathar --rpc-cors=all --rpc-methods=Unsafe --rpc-external --port 30335 --bootnodes /ip4/127.0.0.1/tcp/30334/p2p/12D3KooWDLpRT9KFo6pKdkmdQQt599tmqVYpoeiHemY32Gf4RUpp --node-key 0xefb8bf6cb99c6093561803d7c04854a192a725ba4786a303aaf404c65f51f42a --validator
+    ```
+
+This launch is actually an example of how you can launch validators with keys derived from your ethereum-like (ecdsa) keys.
 
 ### Connect with Polkadot-JS Apps Front-End
 
