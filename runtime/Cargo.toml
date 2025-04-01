@@ -16,7 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 # Common crates
 codec = { features = ["derive"], workspace = true }
 evm = { workspace = true }
+hex = { workspace = true }
 hex-literal = { workspace = true }
+libsecp256k1 = { workspace = true }
 log = { workspace = true }
 scale-info = { features = ["derive", "serde"], workspace = true }
 serde_json = { workspace = true, default-features = false, features = ["alloc"] }

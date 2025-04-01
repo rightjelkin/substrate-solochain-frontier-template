@@ -29,9 +29,10 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_genesis_builder::{self, PresetId};
 use sp_keyring::AccountKeyring;
 #[allow(unused_imports)]
-use sp_core::{ecdsa,sr25519};
+use sp_core::{ecdsa, sr25519, ed25519, keccak_256};
 use sp_core::{Pair, Public, U256, H160};
 use sp_runtime::traits::{ Verify, IdentifyAccount };
+use fp_account::AccountId20;
 
 type Properties = serde_json::map::Map<String, serde_json::Value>;
 
@@ -66,6 +67,38 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 		get_from_seed::<GrandpaId>(s)
 	)
 }
+
+#[allow(unused_imports)]
+fn authority_keys_from_ethereum_key(hex_privkey: &str) -> (AccountId20, AuraId, GrandpaId) {
+    let privkey_bytes = hex::decode(hex_privkey.trim_start_matches("0x")).expect("hex decode failed");
+    let ecdsa_pair = ecdsa::Pair::from_seed_slice(&privkey_bytes).expect("ECDSA key failed");
+
+
+    let public_uncompressed = libsecp256k1::PublicKey::parse_slice(
+        &ecdsa_pair.public(),
+        None,
+    ).expect("public key parse failed").serialize();
+
+    let evm_address = H160::from_slice(&keccak_256(&public_uncompressed[1..])[12..]);
+
+    let derived_seed = keccak_256(&privkey_bytes);
+    let aura_pair = sr25519::Pair::from_seed_slice(&derived_seed).expect("Sr25519 key failed");
+    let aura_public = AuraId::from(aura_pair.public());
+    let grandpa_pair = ed25519::Pair::from_seed_slice(&derived_seed).expect("Ed25519 key failed");
+    let grandpa_public = GrandpaId::from(grandpa_pair.public());
+
+  	// Aura and Grandpa private keys can be checked like that
+  	// log::info!("{:?}", keccak_256(&privkey_bytes));
+  	// log::info!("Aura Seed: 0x{}", hex::encode(&derived_seed));
+  	// log::info!("Grandpa Seed: 0x{}", hex::encode(&derived_seed));
+
+    (
+        evm_address.into(),
+        aura_public,
+        grandpa_public,
+    )
+}
+
 
 pub fn properties() -> Properties {
 	let mut properties = Properties::new();
@@ -172,6 +205,14 @@ pub fn local_config_genesis() -> Value {
 		vec![
 			authority_keys_from_seed("Alice"),
 			authority_keys_from_seed("Bob"),
+			/*
+			 * Or you can derive it right from ethereum private keys of Alith and Baltathar.
+			 * Sometimes handy when you want to see block authors from your endowed account.
+			 * But you need to inser their keys to keystore maanually (See README.md)
+			 */ 
+			// authority_keys_from_ethereum_key("0x5fb92d6e98884f76de468fa3f6278f8807c48bebc13595d45af5bdc4da702133"), // Alith
+			// authority_keys_from_ethereum_key("0x8075991ce870b93a8870eca0c0f91913d12f47948ca0fd25b49c6fa7cdbeee8b") // Baltathar
+	  
 		],
 		vec![
 			AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")), // Alith

@@ -21,10 +21,12 @@ clap = { version = "4.5.13" }
 codec = { version = "3.6.12", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 evm = { git = "https://github.com/rust-ethereum/evm", branch = "v0.x", default-features = false }
 futures = { version = "0.3.31" }
+hex = { version = "0.4.1", default-features = false }
 hex-literal = "0.4.1"
 jsonrpsee = { version = "0.24.3" }
 log = { version = "0.4.22", default-features = false }
 scale-info = { version = "2.11.1", default-features = false, features = ["derive"] }
+libsecp256k1 = { version = "0.7.2", default-features = false }
 serde_json = { version = "1.0.132", default-features = false }
 
 # Custom pallets
